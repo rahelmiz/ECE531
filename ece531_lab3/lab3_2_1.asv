@@ -1,0 +1,55 @@
+rx = sdrrx('Pluto', 'GainSource','Manual', 'Gain', 20, 'CenterFrequency', 2.412e9);
+tx = sdrrx('Pluto');
+
+tx.BasebandSampleRate = 56e6;
+rx.BasebandSampleRate = 56e6;
+% view some spectrum
+%rx.SamplesPerFrame = 2^11; 
+%frameSize = rx.SamplesPerFrame; %number of samples for frame
+
+
+startFreq = 70e6; %Hz
+endFreq = 6e9; %Hz
+fs = rx.BasebandSampleRate;
+fNames = {};
+Spectra = [];
+
+for freq=startFreq:fs:endFreq
+    %record the data for offline processing.
+    rx = sdrrx('Pluto', 'GainSource','Manual', 'Gain', 20, 'CenterFrequency', freq, 'SamplesPerFrame', 2^11);
+    frameSize = rx.SamplesPerFrame; %frame size specifies the number of samples for frame
+    data = zeros(frameSize,framesToCollect);
+    framesToCollect = 10; 
+    %collect all frames continuously for current frequency
+    for frame = 1:framesToCollect
+        [d, valid, of] = rx();
+        data(:,frame) = d;
+        if ~valid
+            warning('data  invalid')
+        elseif of 
+            warning('overflow occured')
+        %else
+        %  data(:,frame) = d; 
+        end
+    end
+    %save data for processing
+    fName = append('f', string(freq/1000000), 'MHz.bb') ;
+    fNames{end + 1} = fName;
+    bfw = comm.BasebandFileWriter(fName, ...
+    rx.BasebandSampleRate, freq);
+    %save the  data
+    bfw(data(:));
+    %save data as a column
+    bfw.release();
+end
+
+%load data and perform processing
+
+bfr = comm.BasebandFileReader(fNames(0), 'SamplesPerFrame', frameSize);
+samples = bfr();
+% sa2 = dsp.SpectrumAnalyzer;
+% for frame = 1:framesToCollect
+%     sa2(bfr());
+% end
+
+
